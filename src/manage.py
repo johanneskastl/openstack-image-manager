@@ -5,6 +5,8 @@ import time
 
 from natsort import natsorted
 from oslo_config import cfg
+from os import listdir
+from os.path import isfile, join
 import openstack
 import os_client_config
 import requests
@@ -23,7 +25,7 @@ opts = [
     cfg.BoolOpt('use-raw-images', help='Use raw images', default=True),
     cfg.BoolOpt('yes-i-really-know-what-i-do', help='Really delete images', default=False),
     cfg.StrOpt('cloud', help='Cloud name in clouds.yaml', default='images'),
-    cfg.StrOpt('images', help='Path to the images.yml file', default='etc/images.yml'),
+    cfg.StrOpt('images', help='Path to the folder with the image files', default='etc/images/'),
     cfg.StrOpt('name', help='Image name to process', default=None),
     cfg.StrOpt('tag', help='Name of the tag used to identify managed images', default='managed_by_osism')
 ]
@@ -44,9 +46,18 @@ REQUIRED_KEYS = [
     'visibility',
 ]
 
-with open(CONF.images) as fp:
-    data = yaml.load(fp, Loader=yaml.SafeLoader)
-    images = data.get('images', [])
+onlyfiles = []
+for f in listdir(CONF.images):
+    if isfile(join(CONF.images, f)):
+        onlyfiles.append(f)
+
+all_images = []
+for file in onlyfiles:
+    with open(CONF.images + file) as fp:
+        data = yaml.load(fp, Loader=yaml.SafeLoader)
+        images = data.get('images')
+        for image in images:
+            all_images.append(image)
 
 conn = openstack.connect(cloud=CONF.cloud)
 glance = os_client_config.make_client("image", cloud=CONF.cloud)
@@ -131,7 +142,7 @@ cloud_images = get_images(conn, glance)
 
 existing_images = []
 
-for image in images:
+for image in all_images:
     skip = False
 
     for required_key in REQUIRED_KEYS:
